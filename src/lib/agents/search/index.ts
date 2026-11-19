@@ -10,6 +10,9 @@ import { and, eq, gt } from 'drizzle-orm';
 import { SuggestionBlock, TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
 import { recall } from '@/lib/memory/client';
+import ModelRegistry from '@/lib/models/registry';
+import { getCouncilConfig } from '@/lib/config/serverRegistry';
+import { getJudgePrompt } from '@/lib/prompts/search/council';
 
 class SearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
@@ -225,6 +228,26 @@ class SearchAgent {
       }
     }
 
+    // Council mode: the configured second model answers independently, then a
+    // judge compares both. Never allowed to break the primary answer.
+    if (
+      !classification.classification.skipSearch &&
+      responseBlockId &&
+      searchResults
+    ) {
+      try {
+        const primaryBlock = session.getBlock(responseBlockId) as TextBlock;
+        await this.runCouncil(
+          session,
+          input,
+          finalContextWithWidgets,
+          primaryBlock?.data ?? '',
+        );
+      } catch (err) {
+        console.error('Council run failed:', err);
+      }
+    }
+
     session.emit('end', {});
 
     await db
@@ -240,6 +263,105 @@ class SearchAgent {
         ),
       )
       .execute();
+  }
+
+  private async streamBlock(
+    session: SessionManager,
+    stream: AsyncIterable<{ contentChunk: string }>,
+  ): Promise<string> {
+    let blockId = '';
+    let text = '';
+
+    for await (const chunk of stream) {
+      if (!blockId) {
+        const block: TextBlock = {
+          id: crypto.randomUUID(),
+          type: 'text',
+          data: chunk.contentChunk,
+        };
+        session.emitBlock(block);
+        blockId = block.id;
+        text = chunk.contentChunk;
+      } else {
+        text += chunk.contentChunk;
+        session.updateBlock(blockId, [
+          {
+            op: 'replace',
+            path: '/data',
+            value: text,
+          },
+        ]);
+      }
+    }
+
+    return text;
+  }
+
+  private async runCouncil(
+    session: SessionManager,
+    input: SearchAgentInput,
+    writerContext: string,
+    primaryAnswer: string,
+  ) {
+    const council = getCouncilConfig();
+    if (!council) return;
+
+    const registry = new ModelRegistry();
+    const second = await registry.loadChatModel(
+      council.providerId,
+      council.modelKey,
+    );
+
+    session.emitBlock({
+      id: crypto.randomUUID(),
+      type: 'text',
+      data: `\n\n---\n\n## ⚖️ Council — second opinion (${council.modelKey})\n\n`,
+    });
+
+    const secondAnswer = await this.streamBlock(
+      session,
+      second.streamText({
+        messages: [
+          {
+            role: 'system',
+            content: getWriterPrompt(
+              writerContext,
+              input.config.systemInstructions,
+              input.config.mode,
+            ),
+          },
+          ...input.chatHistory,
+          {
+            role: 'user',
+            content: input.followUp,
+          },
+        ],
+      }),
+    );
+
+    session.emitBlock({
+      id: crypto.randomUUID(),
+      type: 'text',
+      data: `\n\n## Council verdict\n\n`,
+    });
+
+    await this.streamBlock(
+      session,
+      input.config.llm.streamText({
+        messages: [
+          {
+            role: 'system',
+            content: getJudgePrompt(
+              input.followUp,
+              primaryAnswer,
+              secondAnswer,
+              'primary-model',
+              council.modelKey,
+            ),
+          },
+        ],
+      }),
+    );
   }
 }
 

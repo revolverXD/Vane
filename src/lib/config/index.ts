@@ -148,6 +148,28 @@ class ConfigManager {
         scope: 'server',
         env: 'MEMORY_API_URL',
       },
+      {
+        name: 'Council model',
+        key: 'councilModel',
+        type: 'string',
+        required: false,
+        description:
+          'Council mode: a second model that answers every research query and a judge compares both. Format: "providerId:modelKey" as shown under Settings → Models (e.g. "a1b2...:qwen3.8-flash-next-iq3_s"). Requires the model to be added under Settings → Models first.',
+        placeholder: '',
+        default: '',
+        scope: 'server',
+        env: 'COUNCIL_MODEL',
+      },
+      {
+        name: 'Enable Council mode',
+        key: 'councilEnabled',
+        type: 'switch',
+        required: false,
+        description:
+          'Answer every research query with both the primary and the Council model, then add a judge verdict comparing the two. Doubles answer time.',
+        default: false,
+        scope: 'server',
+      },
     ],
   };
 

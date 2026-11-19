@@ -21,3 +21,17 @@ export const getFirecrawlConfig = (): { url: string; fcKey: string } => ({
 
 export const getMemoryURL = () =>
   configManager.getConfig('search.memoryURL', '');
+
+// Council: optional second-model cross-check. Returns null when unset/malformed.
+export const getCouncilConfig = (): {
+  providerId: string;
+  modelKey: string;
+  enabled: boolean;
+} | null => {
+  const enabled = configManager.getConfig('search.councilEnabled', false) === true;
+  const ref: string = configManager.getConfig('search.councilModel', '');
+  if (!enabled || !ref.includes(':')) return null;
+  const [providerId, modelKey] = ref.split(':', 2);
+  if (!providerId || !modelKey) return null;
+  return { providerId, modelKey, enabled };
+};
