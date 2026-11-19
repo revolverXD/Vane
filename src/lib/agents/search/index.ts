@@ -431,6 +431,38 @@ class SearchAgent {
       data: `\n\n---\n\n## ⚖️ Council — second opinion (${council.modelKey})\n\n`,
     });
 
+    // The council model may run with a much smaller context than the primary
+    // model (llama.cpp answers 400 'Max length reached!' when the prompt
+    // itself overflows). Keep only the highest-ranked results that fit.
+    const COUNCIL_CONTEXT_TOKENS = 3000;
+    const COUNCIL_HISTORY_TOKENS = 1200;
+
+    const results = writerContext.match(/<result[\s\S]*?<\/result>/g) ?? [];
+    const kept: string[] = [];
+    let used = 0;
+    for (const r of results) {
+      const t = getTokenCount(r);
+      if (used + t > COUNCIL_CONTEXT_TOKENS) break;
+      kept.push(r);
+      used += t;
+    }
+
+    const hist: typeof input.chatHistory = [];
+    let hUsed = 0;
+    for (let i = input.chatHistory.length - 1; i >= 0; i--) {
+      const t = getTokenCount(
+        String(input.chatHistory[i].content ?? ''),
+      );
+      if (hUsed + t > COUNCIL_HISTORY_TOKENS) break;
+      hUsed += t;
+      hist.unshift(input.chatHistory[i]);
+    }
+
+    const councilContext =
+      `<search_results note="Top search results for the query, truncated to fit the council model context; cite these">\n` +
+      kept.join('\n') +
+      `\n</search_results>`;
+
     const secondAnswer = await this.streamBlock(
       session,
       second.streamText({
@@ -438,12 +470,12 @@ class SearchAgent {
           {
             role: 'system',
             content: getWriterPrompt(
-              writerContext,
+              councilContext,
               input.config.systemInstructions,
-              input.config.mode,
+              'balanced',
             ),
           },
-          ...input.chatHistory,
+          ...hist,
           {
             role: 'user',
             content: input.followUp,
