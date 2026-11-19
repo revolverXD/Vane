@@ -32,26 +32,27 @@ const schema = z.object({
     .describe(
       "A self-contained, context-independent reformulation of the user's question.",
     ),
-  clarification: z
-    .object({
-      needed: z
-        .boolean()
-        .describe(
-          'True only if the query has multiple plausible readings that would lead to materially different research.',
-        ),
-      question: z
-        .string()
-        .describe(
-          'One short question asking the user which reading they mean. Empty when needed is false.',
-        ),
-      options: z
-        .array(z.string())
-        .describe(
-          '2-4 self-contained queries, one per plausible interpretation, that the user can click to proceed. Empty when needed is false.',
-        ),
-    })
-    .optional()
-    .describe('Optional clarifying question for genuinely ambiguous queries.'),
+  // Required (not .optional()): llama.cpp structured outputs reject optional
+  // fields. "no clarification" is expressed as needed=false with empties.
+  clarification: z.object({
+    needed: z
+      .boolean()
+      .describe(
+        'True only if the query has multiple plausible readings that would lead to materially different research.',
+      ),
+    question: z
+      .string()
+      .describe(
+        'One short question asking the user which reading they mean. Empty when needed is false.',
+      ),
+    options: z
+      .array(z.string())
+      .describe(
+        '2-4 self-contained queries, one per plausible interpretation, that the user can click to proceed. Empty when needed is false.',
+      ),
+  }).describe(
+    'Always present. Unless the query is genuinely ambiguous use needed=false, question="", options=[].',
+  ),
 });
 
 export const classify = async (input: ClassifierInput) => {
