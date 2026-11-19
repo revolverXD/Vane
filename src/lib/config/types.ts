@@ -32,6 +32,12 @@ type PasswordUIConfigField = BaseUIConfigField & {
   default?: string;
 };
 
+type ModelSelectUIConfigField = BaseUIConfigField & {
+  type: 'modelSelect';
+  placeholder?: string;
+  default?: string;
+};
+
 type TextareaUIConfigField = BaseUIConfigField & {
   type: 'textarea';
   placeholder?: string;
@@ -48,7 +54,8 @@ type UIConfigField =
   | SelectUIConfigField
   | PasswordUIConfigField
   | TextareaUIConfigField
-  | SwitchUIConfigField;
+  | SwitchUIConfigField
+  | ModelSelectUIConfigField;
 
 type ConfigModelProvider = {
   id: string;
@@ -97,6 +104,7 @@ type UIConfigSections = {
 
 export type {
   UIConfigField,
+  ModelSelectUIConfigField,
   PasswordUIConfigField,
   Config,
   EnvMap,

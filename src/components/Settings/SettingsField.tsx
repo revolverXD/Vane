@@ -3,10 +3,12 @@ import {
   SelectUIConfigField,
   StringUIConfigField,
   SwitchUIConfigField,
+  ModelSelectUIConfigField,
   TextareaUIConfigField,
   UIConfigField,
 } from '@/lib/config/types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { MinimalProvider } from '@/lib/models/types';
 import Select from '../ui/Select';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
@@ -167,6 +169,97 @@ const SettingsInput = ({
             </span>
           )}
         </div>
+      </div>
+    </section>
+  );
+};
+
+const SettingsModelSelect = ({
+  field,
+  value,
+  setValue,
+  dataAdd,
+}: {
+  field: ModelSelectUIConfigField;
+  value?: any;
+  setValue: (value: any) => void;
+  dataAdd: string;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState<{ value: string; label: string }[]>(
+    [],
+  );
+
+  useEffect(() => {
+    fetch('/api/providers')
+      .then((res) => (res.ok ? res.json() : { providers: [] }))
+      .then((data: { providers: MinimalProvider[] }) =>
+        setOptions(
+          data.providers.flatMap((p) =>
+            (p.chatModels ?? []).map((m) => ({
+              value: `${p.id}:${m.key}`,
+              label: `${p.name} \u00b7 ${m.name}`,
+            })),
+          ),
+        ),
+      )
+      .catch(() => setOptions([]));
+  }, []);
+
+  const handleSave = async (newValue: any) => {
+    setLoading(true);
+    setValue(newValue);
+    try {
+      if (field.scope === 'client') {
+        localStorage.setItem(field.key, newValue);
+        emitClientConfigChanged();
+      } else {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            key: `${dataAdd}.${field.key}`,
+            value: newValue,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error('Failed to save config:', await res.text());
+          throw new Error('Failed to save configuration');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving config:', error);
+      toast.error('Failed to save configuration.');
+    } finally {
+      setTimeout(() => setLoading(false), 150);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-light-200 bg-light-primary/80 p-4 lg:p-6 transition-colors dark:border-dark-200 dark:bg-dark-primary/80">
+      <div className="space-y-3 lg:space-y-5">
+        <div>
+          <h4 className="text-sm lg:text-sm text-black dark:text-white">
+            {field.name}
+          </h4>
+          <p className="text-[11px] lg:text-xs text-black/50 dark:text-white/50">
+            {field.description}
+          </p>
+        </div>
+        <Select
+          value={value ?? ''}
+          onChange={(event) => handleSave(event.target.value)}
+          options={[
+            { value: '', label: 'None' },
+            ...options,
+          ]}
+          className="!text-xs lg:!text-sm"
+          loading={loading}
+          disabled={loading}
+        />
       </div>
     </section>
   );
@@ -348,6 +441,15 @@ const SettingsField = ({
     case 'password':
       return (
         <SettingsInput
+          field={field}
+          value={val}
+          setValue={setVal}
+          dataAdd={dataAdd}
+        />
+      );
+    case 'modelSelect':
+      return (
+        <SettingsModelSelect
           field={field}
           value={val}
           setValue={setVal}

@@ -30,8 +30,10 @@ export const getCouncilConfig = (): {
 } | null => {
   const enabled = configManager.getConfig('search.councilEnabled', false) === true;
   const ref: string = configManager.getConfig('search.councilModel', '');
-  if (!enabled || !ref.includes(':')) return null;
-  const [providerId, modelKey] = ref.split(':', 2);
+  const sep = ref.indexOf(':');
+  if (!enabled || sep === -1) return null;
+  const providerId = ref.slice(0, sep);
+  const modelKey = ref.slice(sep + 1);
   if (!providerId || !modelKey) return null;
   return { providerId, modelKey, enabled };
 };

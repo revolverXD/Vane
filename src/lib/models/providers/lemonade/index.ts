@@ -55,7 +55,22 @@ class LemonadeProvider extends BaseModelProvider<LemonadeConfig> {
       const data = await res.json();
 
       const models: Model[] = data.data
-        .filter((m: any) => m.recipe === 'llamacpp')
+        // Chat-capable models are declared via labels (flm, llamacpp and any
+        // future engine); fall back to llamacpp when metadata is absent.
+        .filter(
+          (m: any) =>
+            (m.labels ?? []).includes('chat') ||
+            (m.labels === undefined && m.recipe === 'llamacpp'),
+        )
+        .map((m: any) => {
+          return {
+            name: m.id,
+            key: m.id,
+          };
+        });
+
+      const embeddingModels: Model[] = data.data
+        .filter((m: any) => (m.labels ?? []).includes('embeddings'))
         .map((m: any) => {
           return {
             name: m.id,
@@ -64,7 +79,7 @@ class LemonadeProvider extends BaseModelProvider<LemonadeConfig> {
         });
 
       return {
-        embedding: models,
+        embedding: embeddingModels,
         chat: models,
       };
     } catch (err) {

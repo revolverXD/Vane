@@ -151,10 +151,10 @@ class ConfigManager {
       {
         name: 'Council model',
         key: 'councilModel',
-        type: 'string',
+        type: 'modelSelect',
         required: false,
         description:
-          'Council mode: a second model that answers every research query and a judge compares both. Format: "providerId:modelKey" as shown under Settings → Models (e.g. "a1b2...:qwen3.8-flash-next-iq3_s"). Requires the model to be added under Settings → Models first.',
+          'Council mode: a second model that answers every research query and a judge compares both. Pick any chat model you have configured under Settings → Models.',
         placeholder: '',
         default: '',
         scope: 'server',
