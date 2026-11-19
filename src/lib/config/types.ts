@@ -97,6 +97,7 @@ type UIConfigSections = {
 
 export type {
   UIConfigField,
+  PasswordUIConfigField,
   Config,
   EnvMap,
   UIConfigSections,
