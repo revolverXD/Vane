@@ -7,7 +7,7 @@ import { WidgetExecutor } from './widgets';
 import db from '@/lib/db';
 import { messages } from '@/lib/db/schema';
 import { and, eq, gt } from 'drizzle-orm';
-import { TextBlock } from '@/lib/types';
+import { SuggestionBlock, TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
 
 class SearchAgent {
@@ -58,6 +58,49 @@ class SearchAgent {
       query: input.followUp,
       llm: input.config.llm,
     });
+
+    // Interactive clarification: ask one question instead of researching a
+    // guess. The options ride the existing 'suggestion' block plumbing —
+    // clicking one sends it as the next user message, and the classifier's
+    // never-ask-twice rule forces it to proceed on the follow-up turn.
+    const clar = classification.clarification;
+    if (
+      !classification.classification.skipSearch &&
+      clar?.needed &&
+      clar.question
+    ) {
+      const questionBlock: TextBlock = {
+        id: crypto.randomUUID(),
+        type: 'text',
+        data: clar.question,
+      };
+      const optionsBlock: SuggestionBlock = {
+        id: crypto.randomUUID(),
+        type: 'suggestion',
+        data: (clar.options ?? []).slice(0, 4),
+      };
+
+      session.emitBlock(questionBlock);
+      session.emitBlock(optionsBlock);
+
+      session.emit('end', {});
+
+      await db
+        .update(messages)
+        .set({
+          status: 'completed',
+          responseBlocks: session.getAllBlocks(),
+        })
+        .where(
+          and(
+            eq(messages.chatId, input.chatId),
+            eq(messages.messageId, input.messageId),
+          ),
+        )
+        .execute();
+
+      return;
+    }
 
     const widgetPromise = WidgetExecutor.executeAll({
       classification,

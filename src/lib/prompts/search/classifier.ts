@@ -46,6 +46,17 @@ Do not contain excess information or everything that has been discussed before, 
 The standalone follow-up should be concise and to the point.
 </standalone_followup>
 
+<clarification>
+You may optionally ask ONE clarifying question before research begins.
+Set clarification.needed to true ONLY when ALL of these hold:
+- The query has 2 or more plausible interpretations that would lead to materially different research (e.g. an ambiguous person/entity name, an unclear comparison target, a missing but decisive detail).
+- The conversation history does NOT already resolve the ambiguity.
+- The LAST assistant message in the history was NOT itself a clarifying question — if it was, ALWAYS set needed to false and proceed with the single most likely interpretation (prefer the one matching the user's last reply).
+Be conservative: for the vast majority of queries needed must be false. Minor vagueness is not ambiguity — search broadly instead.
+When needed is true: question is ONE short sentence. options contains 2-4 self-contained search queries, one per interpretation, phrased so clicking one directly starts the right research.
+When needed is false, set question to "" and options to [].
+</clarification>
+
 <output_format>
 You must respond in the following JSON format without any extra text, explanations or filler sentences:
 {
@@ -58,7 +69,12 @@ You must respond in the following JSON format without any extra text, explanatio
     "showStockWidget": boolean,
     "showCalculationWidget": boolean,
   },
-  "standaloneFollowUp": string
+  "standaloneFollowUp": string,
+  "clarification": {
+    "needed": boolean,
+    "question": string,
+    "options": string[]
+  }
 }
 </output_format>
 `;
