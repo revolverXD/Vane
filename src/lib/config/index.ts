@@ -136,6 +136,18 @@ class ConfigManager {
         scope: 'server',
         env: 'FIRECRAWL_API_KEY',
       },
+      {
+        name: 'Shared Memory URL',
+        key: 'memoryURL',
+        type: 'string',
+        required: false,
+        description:
+          'Optional. Base URL of the shared memory service (e.g. http://192.168.50.193:8090). When set, relevant saved facts are injected into answers and a save-to-memory action appears on completed messages.',
+        placeholder: 'http://192.168.50.193:8090',
+        default: '',
+        scope: 'server',
+        env: 'MEMORY_API_URL',
+      },
     ],
   };
 

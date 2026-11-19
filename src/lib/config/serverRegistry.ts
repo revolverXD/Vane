@@ -18,3 +18,6 @@ export const getFirecrawlConfig = (): { url: string; fcKey: string } => ({
   url: configManager.getConfig('search.firecrawlURL', ''),
   fcKey: configManager.getConfig('search.firecrawlapiKey', ''),
 });
+
+export const getMemoryURL = () =>
+  configManager.getConfig('search.memoryURL', '');

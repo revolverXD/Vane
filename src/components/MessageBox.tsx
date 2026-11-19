@@ -11,9 +11,13 @@ import {
   Layers3,
   Plus,
   CornerDownRight,
+  Database,
+  Check,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import Markdown, { MarkdownToJSX, RuleType } from 'markdown-to-jsx';
 import Copy from './MessageActions/Copy';
+import SaveToMemory from './MessageActions/SaveToMemory';
 import Rewrite from './MessageActions/Rewrite';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
@@ -196,6 +200,7 @@ const MessageBox = ({
                       />
                     </div>
                     <div className="flex flex-row items-center -mr-2">
+                      <SaveToMemory section={section} message={parsedMessage} />
                       <Copy initialMessage={parsedMessage} section={section} />
                       <button
                         onClick={() => {

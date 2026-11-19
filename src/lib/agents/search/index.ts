@@ -9,6 +9,7 @@ import { messages } from '@/lib/db/schema';
 import { and, eq, gt } from 'drizzle-orm';
 import { SuggestionBlock, TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
+import { recall } from '@/lib/memory/client';
 
 class SearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
@@ -102,6 +103,8 @@ class SearchAgent {
       return;
     }
 
+    const memoryPromise = recall(input.followUp);
+
     const widgetPromise = WidgetExecutor.executeAll({
       classification,
       chatHistory: input.chatHistory,
@@ -160,7 +163,15 @@ class SearchAgent {
       })
       .join('\n-------------\n');
 
-    const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>`;
+    const memories = await memoryPromise;
+    const memoryContext =
+      memories.length > 0
+        ? `\n<shared_memory note="Facts the user or their other assistants saved earlier; use them when relevant, do NOT cite them as a source">\n${memories
+            .map((m) => `<memory title="${m.title}">${m.summary}</memory>`)
+            .join('\n')}\n</shared_memory>`
+        : '';
+
+    const finalContextWithWidgets = `<search_results note="These are the search results and assistant can cite these">\n${finalContext}\n</search_results>\n<widgets_result noteForAssistant="Its output is already showed to the user, assistant can use this information to answer the query but do not CITE this as a souce">\n${widgetContext}\n</widgets_result>${memoryContext}`;
 
     const writerPrompt = getWriterPrompt(
       finalContextWithWidgets,
