@@ -8,15 +8,17 @@ const SmallNewsCard = ({ item }: { item: Discover }) => (
     target="_blank"
   >
     <div className="relative aspect-video overflow-hidden">
-      <img
-        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-        src={
-          new URL(item.thumbnail).origin +
-          new URL(item.thumbnail).pathname +
-          `?id=${new URL(item.thumbnail).searchParams.get('id')}`
-        }
-        alt={item.title}
-      />
+{item.thumbnail ? (
+            <img
+              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+              src={item.thumbnail}
+              alt={item.title}
+            />
+          ) : (
+            <div className="w-full h-full bg-light-200 dark:bg-dark-200 flex items-center justify-center">
+              <span className="text-4xl opacity-30">📰</span>
+            </div>
+          )}
     </div>
     <div className="p-4">
       <h3 className="font-semibold text-sm mb-2 leading-tight line-clamp-2 group-hover:text-cyan-500 dark:group-hover:text-cyan-300 transition duration-200">

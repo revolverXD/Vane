@@ -1,98 +1,78 @@
-import { searchSearxng } from '@/lib/searxng';
+import configManager from '@/lib/config';
+import { fetchFeed, type RssItem } from '@/lib/rss';
 
-const websitesForTopic = {
-  tech: {
-    query: ['technology news', 'latest tech', 'AI', 'science and innovation'],
-    links: ['techcrunch.com', 'wired.com', 'theverge.com'],
-  },
-  finance: {
-    query: ['finance news', 'economy', 'stock market', 'investing'],
-    links: ['bloomberg.com', 'cnbc.com', 'marketwatch.com'],
-  },
-  art: {
-    query: ['art news', 'culture', 'modern art', 'cultural events'],
-    links: ['artnews.com', 'hyperallergic.com', 'theartnewspaper.com'],
-  },
-  sports: {
-    query: ['sports news', 'latest sports', 'cricket football tennis'],
-    links: ['espn.com', 'bbc.com/sport', 'skysports.com'],
-  },
-  entertainment: {
-    query: ['entertainment news', 'movies', 'TV shows', 'celebrities'],
-    links: ['hollywoodreporter.com', 'variety.com', 'deadline.com'],
-  },
+const FEEDS_KEY = '***';
+const MAX_ARTICLES = 60;
+
+const getFeeds = (): string[] =>
+  String(configManager.getConfig(FEEDS_KEY, '') ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+const saveFeeds = (feeds: string[]) => {
+  configManager.updateConfig(FEEDS_KEY, feeds.join('\n'));
 };
 
-type Topic = keyof typeof websitesForTopic;
-
-export const GET = async (req: Request) => {
+export const GET = async () => {
   try {
-    const params = new URL(req.url).searchParams;
+    const feeds = getFeeds();
 
-    const mode: 'normal' | 'preview' =
-      (params.get('mode') as 'normal' | 'preview') || 'normal';
-    const topic: Topic = (params.get('topic') as Topic) || 'tech';
-
-    const selectedTopic = websitesForTopic[topic];
-
-    let data = [];
-
-    if (mode === 'normal') {
-      const seenUrls = new Set();
-
-      data = (
-        await Promise.all(
-          selectedTopic.links.flatMap((link) =>
-            selectedTopic.query.map(async (query) => {
-              return (
-                await searchSearxng(`site:${link} ${query}`, {
-                  engines: ['bing news'],
-                  pageno: 1,
-                  language: 'en',
-                })
-              ).results;
-            }),
-          ),
-        )
-      )
-        .flat()
-        .filter((item) => {
-          const url = item.url?.toLowerCase().trim();
-          if (seenUrls.has(url)) return false;
-          seenUrls.add(url);
-          return true;
-        })
-        .sort(() => Math.random() - 0.5);
-    } else {
-      data = (
-        await searchSearxng(
-          `site:${selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)]} ${selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)]}`,
-          {
-            engines: ['bing news'],
-            pageno: 1,
-            language: 'en',
-          },
-        )
-      ).results;
-    }
-
-    return Response.json(
-      {
-        blogs: data,
-      },
-      {
-        status: 200,
-      },
+    // One dead feed must not take down the page.
+    const settled = await Promise.allSettled(
+      feeds.map((f) => fetchFeed(f)),
     );
+
+    const seen = new Set<string>();
+    const articles: RssItem[] = settled
+      .flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+      .filter((a) => {
+        const key = a.url.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0),
+      )
+      .slice(0, MAX_ARTICLES);
+
+    return Response.json({ blogs: articles, feeds }, { status: 200 });
   } catch (err) {
     console.error(`An error occurred in discover route: ${err}`);
     return Response.json(
-      {
-        message: 'An error has occurred',
-      },
-      {
-        status: 500,
-      },
+      { message: 'An error has occurred' },
+      { status: 500 },
+    );
+  }
+};
+
+export const POST = async (req: Request) => {
+  try {
+    const body = await req.json();
+    const url = String(body.url ?? '').trim();
+
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      return Response.json(
+        { message: 'A valid http(s) feed URL is required' },
+        { status: 400 },
+      );
+    }
+
+    const feeds = getFeeds();
+    if (body.remove) {
+      saveFeeds(feeds.filter((f) => f !== url));
+    } else if (!feeds.includes(url)) {
+      saveFeeds([...feeds, url]);
+    }
+
+    return Response.json({ feeds: getFeeds() }, { status: 200 });
+  } catch (err) {
+    console.error(`An error occurred in discover route: ${err}`);
+    return Response.json(
+      { message: 'An error has occurred' },
+      { status: 500 },
     );
   }
 };

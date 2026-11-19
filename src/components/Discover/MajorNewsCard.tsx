@@ -16,15 +16,17 @@ const MajorNewsCard = ({
     {isLeft ? (
       <>
         <div className="relative w-80 h-full overflow-hidden rounded-2xl flex-shrink-0">
-          <img
-            className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-            src={
-              new URL(item.thumbnail).origin +
-              new URL(item.thumbnail).pathname +
-              `?id=${new URL(item.thumbnail).searchParams.get('id')}`
-            }
-            alt={item.title}
-          />
+          {item.thumbnail ? (
+            <img
+              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+              src={item.thumbnail}
+              alt={item.title}
+            />
+          ) : (
+            <div className="w-full h-full bg-light-200 dark:bg-dark-200 flex items-center justify-center">
+              <span className="text-4xl opacity-30">📰</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col justify-center flex-1 py-4">
           <h2

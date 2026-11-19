@@ -1,9 +1,6 @@
-'use client';
-
-import { Globe2Icon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Globe2Icon, XIcon, PlusIcon } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import SmallNewsCard from '@/components/Discover/SmallNewsCard';
 import MajorNewsCard from '@/components/Discover/MajorNewsCard';
 
@@ -14,64 +11,53 @@ export interface Discover {
   thumbnail: string;
 }
 
-const topics: { key: string; display: string }[] = [
-  {
-    display: 'Tech & Science',
-    key: 'tech',
-  },
-  {
-    display: 'Finance',
-    key: 'finance',
-  },
-  {
-    display: 'Art & Culture',
-    key: 'art',
-  },
-  {
-    display: 'Sports',
-    key: 'sports',
-  },
-  {
-    display: 'Entertainment',
-    key: 'entertainment',
-  },
-];
-
 const Page = () => {
   const [discover, setDiscover] = useState<Discover[] | null>(null);
+  const [feeds, setFeeds] = useState<string[]>([]);
+  const [feedUrl, setFeedUrl] = useState('');
+  const [savingFeed, setSavingFeed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTopic, setActiveTopic] = useState<string>(topics[0].key);
 
-  const fetchArticles = async (topic: string) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/discover?topic=${topic}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+      const res = await fetch('/api/discover');
       const data = await res.json();
-
       if (!res.ok) {
         throw new Error(data.message);
       }
-
-      data.blogs = data.blogs.filter((blog: Discover) => blog.thumbnail);
-
       setDiscover(data.blogs);
+      setFeeds(data.feeds ?? []);
     } catch (err: any) {
-      console.error('Error fetching data:', err.message);
-      toast.error('Error fetching data');
+      console.error('Error fetching feeds:', err.message);
+      toast.error('Error fetching feeds');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const updateFeed = async (url: string, remove: boolean) => {
+    setSavingFeed(true);
+    try {
+      const res = await fetch('/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, remove }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setFeeds(data.feeds);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update feeds');
+    } finally {
+      setSavingFeed(false);
     }
   };
 
   useEffect(() => {
-    fetchArticles(activeTopic);
-  }, [activeTopic]);
+    fetchData();
+  }, [fetchData]);
 
   return (
     <>
@@ -87,21 +73,49 @@ const Page = () => {
                 Discover
               </h1>
             </div>
-            <div className="flex flex-row items-center space-x-2 overflow-x-auto">
-              {topics.map((t, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'border-[0.1px] rounded-full text-sm px-3 py-1 text-nowrap transition duration-200 cursor-pointer',
-                    activeTopic === t.key
-                      ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-300/20 border-cyan-700/60 dar:bg-cyan-300/30 dark:border-cyan-300/40'
-                      : 'border-black/30 dark:border-white/30 text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white hover:border-black/40 dark:hover:border-white/40 hover:bg-black/5 dark:hover:bg-white/5',
-                  )}
-                  onClick={() => setActiveTopic(t.key)}
+                        <div className="flex flex-col items-start gap-3 max-w-full">
+              <form
+                className="flex flex-row items-center gap-2 w-full max-w-xl"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!feedUrl.trim()) return;
+                  updateFeed(feedUrl.trim(), false);
+                  setFeedUrl('');
+                }}
+              >
+                <input
+                  type="url"
+                  value={feedUrl}
+                  onChange={(e) => setFeedUrl(e.target.value)}
+                  placeholder="Add RSS/Atom feed URL, e.g. https://example.com/feed.xml"
+                  className="flex-1 rounded-full border border-black/30 dark:border-white/30 bg-transparent px-4 py-1.5 text-sm text-black dark:text-white placeholder:text-black/40 dark:placeholder:text-white/40 focus-visible:outline-none focus-visible:border-cyan-600 dark:focus-visible:border-cyan-400"
+                />
+                <button
+                  type="submit"
+                  disabled={savingFeed}
+                  className="flex items-center gap-1 border-[0.1px] rounded-full text-sm px-3 py-1.5 text-nowrap transition duration-200 cursor-pointer text-cyan-700 dark:text-cyan-300 bg-cyan-300/20 border-cyan-700/60 dark:bg-cyan-300/30 dark:border-cyan-300/40 disabled:opacity-50"
                 >
-                  <span>{t.display}</span>
-                </div>
-              ))}
+                  <PlusIcon size={14} /> Add
+                </button>
+              </form>
+              <div className="flex flex-row items-center gap-2 flex-wrap">
+                {feeds.map((f) => (
+                  <div
+                    key={f}
+                    className="flex items-center gap-1.5 border-[0.1px] rounded-full text-xs px-3 py-1 text-nowrap border-black/30 dark:border-white/30 text-black/70 dark:text-white/70"
+                  >
+                    <span className="max-w-[280px] truncate">{f.replace(/^https?:\/\//, '')}</span>
+                    <button
+                      onClick={() => updateFeed(f, true)}
+                      disabled={savingFeed}
+                      aria-label={`Remove ${f}`}
+                      className="hover:text-red-500 transition"
+                    >
+                      <XIcon size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -127,6 +141,13 @@ const Page = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4 pb-28 pt-5 lg:pb-8 w-full">
+            {discover !== null && discover.length === 0 && (
+              <p className="text-black/60 dark:text-white/60 text-sm pt-10">
+                {feeds.length === 0
+                  ? 'No feeds yet — paste an RSS or Atom feed URL above to build your own discovery page.'
+                  : 'No articles could be loaded from your feeds right now.'}
+              </p>
+            )}
             <div className="block lg:hidden">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {discover?.map((item, i) => (
