@@ -149,7 +149,7 @@ class ConfigManager {
         env: 'MEMORY_API_URL',
       },
       {
-        name: 'Council model',
+        name: 'Council models',
         key: 'councilModel',
         type: 'modelSelect',
         required: false,

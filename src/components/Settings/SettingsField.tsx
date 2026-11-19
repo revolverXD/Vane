@@ -190,6 +190,12 @@ const SettingsModelSelect = ({
     [],
   );
 
+  const selected: string[] = String(value ?? '')
+    .toString()
+    .split('\n')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
   useEffect(() => {
     fetch('/api/providers')
       .then((res) => (res.ok ? res.json() : { providers: [] }))
@@ -249,17 +255,38 @@ const SettingsModelSelect = ({
             {field.description}
           </p>
         </div>
-        <Select
-          value={value ?? ''}
-          onChange={(event) => handleSave(event.target.value)}
-          options={[
-            { value: '', label: 'None' },
-            ...options,
-          ]}
-          className="!text-xs lg:!text-sm"
-          loading={loading}
-          disabled={loading}
-        />
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-light-200 dark:border-dark-200 p-2">
+          {options.length === 0 && (
+            <p className="text-xs text-black/50 dark:text-white/50 p-2">
+              No models configured yet. Add models under Settings - Models
+              first.
+            </p>
+          )}
+          {options.map((option) => {
+            const checked = selected.includes(option.value);
+            return (
+              <label
+                key={option.value}
+                className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-light-secondary dark:hover:bg-dark-secondary"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={loading}
+                  onChange={() => {
+                    const next = checked
+                      ? selected.filter((v) => v !== option.value)
+                      : [...selected, option.value];
+                    handleSave(next.join('\n'));
+                  }}
+                />
+                <span className="!text-xs lg:!text-[13px] text-black/80 dark:text-white/80">
+                  {option.label}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

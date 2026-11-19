@@ -11,7 +11,7 @@ import { SuggestionBlock, TextBlock } from '@/lib/types';
 import { getTokenCount } from '@/lib/utils/splitText';
 import { recall } from '@/lib/memory/client';
 import ModelRegistry from '@/lib/models/registry';
-import { getCouncilConfig } from '@/lib/config/serverRegistry';
+import { getCouncilModels } from '@/lib/config/serverRegistry';
 import { getJudgePrompt } from '@/lib/prompts/search/council';
 import { decompositionPrompt } from '@/lib/prompts/search/deep';
 import formatChatHistoryAsString from '@/lib/utils/formatHistory';
@@ -416,20 +416,8 @@ class SearchAgent {
     writerContext: string,
     primaryAnswer: string,
   ) {
-    const council = getCouncilConfig();
-    if (!council) return;
-
-    const registry = new ModelRegistry();
-    const second = await registry.loadChatModel(
-      council.providerId,
-      council.modelKey,
-    );
-
-    session.emitBlock({
-      id: crypto.randomUUID(),
-      type: 'text',
-      data: `\n\n---\n\n## ⚖️ Council — second opinion (${council.modelKey})\n\n`,
-    });
+    const council = getCouncilModels();
+    if (council.length === 0) return;
 
     // The council model may run with a much smaller context than the primary
     // model (llama.cpp answers 400 'Max length reached!' when the prompt
@@ -450,44 +438,90 @@ class SearchAgent {
     const hist: typeof input.chatHistory = [];
     let hUsed = 0;
     for (let i = input.chatHistory.length - 1; i >= 0; i--) {
-      const t = getTokenCount(
-        String(input.chatHistory[i].content ?? ''),
-      );
+      const t = getTokenCount(String(input.chatHistory[i].content ?? ''));
       if (hUsed + t > COUNCIL_HISTORY_TOKENS) break;
       hUsed += t;
       hist.unshift(input.chatHistory[i]);
     }
 
     const councilContext =
-      `<search_results note="Top search results for the query, truncated to fit the council model context; cite these">\n` +
+      `<search_results note="Top search results for the query, truncated to fit the council model context; cite these">
+` +
       kept.join('\n') +
-      `\n</search_results>`;
-
-    const secondAnswer = await this.streamBlock(
-      session,
-      second.streamText({
-        messages: [
-          {
-            role: 'system',
-            content: getWriterPrompt(
-              councilContext,
-              input.config.systemInstructions,
-              'balanced',
-            ),
-          },
-          ...hist,
-          {
-            role: 'user',
-            content: input.followUp,
-          },
-        ],
-      }),
-    );
+      `
+</search_results>`;
 
     session.emitBlock({
       id: crypto.randomUUID(),
       type: 'text',
-      data: `\n\n## Council verdict\n\n`,
+      data: `
+
+---
+
+## ⚖️ Council — ${council.length} second opinions
+
+`,
+    });
+
+    const registry = new ModelRegistry();
+    const answers: { author: string; text: string }[] = [];
+    for (const model of council) {
+      session.emitBlock({
+        id: crypto.randomUUID(),
+        type: 'text',
+        data: `### ${model.modelKey}
+
+`,
+      });
+      // ponytail: one failing council model must not sink the others; if you
+      // need retries, add them here.
+      try {
+        const chatModel = await registry.loadChatModel(
+          model.providerId,
+          model.modelKey,
+        );
+        const text = await this.streamBlock(
+          session,
+          chatModel.streamText({
+            messages: [
+              {
+                role: 'system',
+                content: getWriterPrompt(
+                  councilContext,
+                  input.config.systemInstructions,
+                  'balanced',
+                ),
+              },
+              ...hist,
+              { role: 'user', content: input.followUp },
+            ],
+          }),
+        );
+        answers.push({ author: model.modelKey, text });
+      } catch (err) {
+        console.error('Council model failed:', model.modelKey, err);
+        session.emitBlock({
+          id: crypto.randomUUID(),
+          type: 'text',
+          data: `
+
+> ⚠️ This council model failed and was skipped.
+
+`,
+        });
+      }
+    }
+
+    if (answers.length === 0) return;
+
+    session.emitBlock({
+      id: crypto.randomUUID(),
+      type: 'text',
+      data: `
+
+## Council verdict
+
+`,
     });
 
     await this.streamBlock(
@@ -498,10 +532,7 @@ class SearchAgent {
             role: 'system',
             content: getJudgePrompt(
               input.followUp,
-              primaryAnswer,
-              secondAnswer,
-              'primary-model',
-              council.modelKey,
+              [{ author: 'primary-model', text: primaryAnswer }, ...answers],
             ),
           },
         ],
