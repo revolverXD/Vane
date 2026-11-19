@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { Mutex } from 'async-mutex';
+import { getFirecrawlConfig } from './config/serverRegistry';
 
 class Scraper {
   private static browser: any | undefined;
@@ -46,9 +47,53 @@ class Scraper {
     }, this.IDLE_KILL_TIMEOUT);
   }
 
+
+  private static async firecrawlScrape(
+    url: string,
+  ): Promise<{ content: string; title: string } | null> {
+    const { url: base, fcKey } = getFirecrawlConfig();
+    if (!base) return null;
+
+    try {
+      const res = await fetch(`${base.replace(/\/+$/, '')}/v2/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(fcKey ? { 'x-firecrawl-api-key': fcKey } : {}),
+        },
+        body: JSON.stringify({ url, formats: ['markdown'] }),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (!res.ok) {
+        console.log(`Firecrawl returned HTTP ${res.status} for ${url}, falling back to built-in browser`);
+        return null;
+      }
+
+      const data = await res.json();
+      const markdown: string = data?.data?.markdown ?? '';
+      if (!markdown.trim()) return null;
+
+      const title: string = data?.data?.metadata?.title || url;
+      return {
+        content: `
+        # ${title} - ${url}
+        ${markdown.trim()}
+        `,
+        title,
+      };
+    } catch (err) {
+      console.log(`Firecrawl scrape failed for ${url}, falling back to built-in browser:`, err);
+      return null;
+    }
+  }
+
   static async scrape(
     url: string,
   ): Promise<{ content: string; title: string }> {
+    const firecrawl = await this.firecrawlScrape(url);
+    if (firecrawl) return firecrawl;
+
     await this.initBrowser();
 
     if (!this.browser) throw new Error('Browser not initialized');

@@ -113,6 +113,29 @@ class ConfigManager {
         scope: 'server',
         env: 'SEARXNG_API_URL',
       },
+      {
+        name: 'Firecrawl URL',
+        key: 'firecrawlURL',
+        type: 'string',
+        required: false,
+        description:
+          'Optional. Base URL of a Firecrawl instance used to scrape pages as markdown. When unset, pages are scraped with the built-in browser.',
+        placeholder: 'http://localhost:3003',
+        default: '',
+        scope: 'server',
+        env: 'FIRECRAWL_API_URL',
+      },
+      {
+        name: 'Firecrawl API Key',
+        key: 'firecrawlApiKey',
+        type: 'password',
+        required: false,
+        description:
+          'Optional. API key for hosted Firecrawl. Leave empty for self-hosted (no auth).',
+        default: '',
+        scope: 'server',
+        env: 'FIRECRAWL_API_KEY',
+      },
     ],
   };
 

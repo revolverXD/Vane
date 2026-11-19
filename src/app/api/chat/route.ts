@@ -6,8 +6,8 @@ import SessionManager from '@/lib/session';
 import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
 import db from '@/lib/db';
-import { eq } from 'drizzle-orm';
-import { chats } from '@/lib/db/schema';
+import { and, eq } from 'drizzle-orm';
+import { chats, messages } from '@/lib/db/schema';
 import UploadManager from '@/lib/uploads/manager';
 
 export const runtime = 'nodejs';
@@ -210,20 +210,46 @@ export const POST = async (req: Request) => {
       }
     });
 
-    agent.searchAsync(session, {
-      chatHistory: history,
-      followUp: message.content,
-      chatId: body.message.chatId,
-      messageId: body.message.messageId,
-      config: {
-        llm,
-        embedding: embedding,
-        sources: body.sources as SearchSources[],
-        mode: body.optimizationMode,
-        fileIds: body.files,
-        systemInstructions: body.systemInstructions || 'None',
-      },
-    });
+    agent
+      .searchAsync(session, {
+        chatHistory: history,
+        followUp: message.content,
+        chatId: body.message.chatId,
+        messageId: body.message.messageId,
+        config: {
+          llm,
+          embedding: embedding,
+          sources: body.sources as SearchSources[],
+          mode: body.optimizationMode,
+          fileIds: body.files,
+          systemInstructions: body.systemInstructions || 'None',
+        },
+      })
+      .catch(async (err) => {
+        // Without this guard a rejected run leaves the message row 'answering'
+        // forever and the client hangs on an orphaned stream.
+        console.error('Chat run failed:', err);
+        try {
+          await db
+            .update(messages)
+            .set({
+              status: 'error',
+              responseBlocks: session.getAllBlocks(),
+            })
+            .where(
+              and(
+                eq(messages.chatId, body.message.chatId),
+                eq(messages.messageId, body.message.messageId),
+              ),
+            )
+            .execute();
+        } catch (dbErr) {
+          console.error('Failed to mark chat run as errored:', dbErr);
+        }
+        session.emit('error', {
+          data: 'An error occurred while processing this request. Check the server logs for details.',
+        });
+      });
 
     ensureChatExists({
       id: body.message.chatId,
