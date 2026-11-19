@@ -13,6 +13,10 @@ import { recall } from '@/lib/memory/client';
 import ModelRegistry from '@/lib/models/registry';
 import { getCouncilConfig } from '@/lib/config/serverRegistry';
 import { getJudgePrompt } from '@/lib/prompts/search/council';
+import { decompositionPrompt } from '@/lib/prompts/search/deep';
+import formatChatHistoryAsString from '@/lib/utils/formatHistory';
+import z from 'zod';
+import { Chunk } from '@/lib/types';
 
 class SearchAgent {
   async searchAsync(session: SessionManager, input: SearchAgentInput) {
@@ -103,6 +107,11 @@ class SearchAgent {
         )
         .execute();
 
+      return;
+    }
+
+    if (input.config.mode === 'deep' && !classification.classification.skipSearch) {
+      await this.runDeepResearch(session, input, classification);
       return;
     }
 
@@ -247,6 +256,110 @@ class SearchAgent {
         console.error('Council run failed:', err);
       }
     }
+
+    session.emit('end', {});
+
+    await db
+      .update(messages)
+      .set({
+        status: 'completed',
+        responseBlocks: session.getAllBlocks(),
+      })
+      .where(
+        and(
+          eq(messages.chatId, input.chatId),
+          eq(messages.messageId, input.messageId),
+        ),
+      )
+      .execute();
+  }
+
+  private async runDeepResearch(
+    session: SessionManager,
+    input: SearchAgentInput,
+    classification: Awaited<ReturnType<typeof classify>>,
+  ) {
+    const schema = z.object({
+      questions: z
+        .array(z.string())
+        .min(1)
+        .max(3)
+        .describe('Sub-questions covering the request comprehensively'),
+    });
+
+    let questions: string[] = [];
+    try {
+      const out = await input.config.llm.generateObject<typeof schema>({
+        messages: [
+          { role: 'system', content: decompositionPrompt },
+          {
+            role: 'user',
+            content: `<conversation_history>\n${formatChatHistoryAsString(input.chatHistory)}\n</conversation_history>\n<user_query>\n${input.followUp}\n</user_query>`,
+          },
+        ],
+        schema,
+      });
+      questions = (out.questions ?? []).slice(0, 3);
+    } catch (err) {
+      console.error('Deep research decomposition failed:', err);
+    }
+    if (questions.length === 0) questions = [input.followUp];
+
+    const researcher = new Researcher();
+    const findings: Chunk[] = [];
+    const seen = new Set<string>();
+
+    // Sequential: the local LLM serves one generation at a time.
+    for (const q of questions) {
+      const out = await researcher.research(session, {
+        chatHistory: input.chatHistory,
+        followUp: q,
+        classification: { ...classification, standaloneFollowUp: q },
+        config: { ...input.config, mode: 'balanced' },
+      });
+
+      (out?.searchFindings ?? []).forEach((f) => {
+        const url = f.metadata?.url ?? f.content.slice(0, 80);
+        if (!seen.has(url)) {
+          seen.add(url);
+          findings.push(f);
+        }
+      });
+    }
+
+    const finalContext = findings
+      .map(
+        (f, index) =>
+          `<result index=${index + 1} title=${f.metadata.title} url=${f.metadata.url}>${f.content}</result>`,
+      )
+      .join('\n');
+
+    const memories = await recall(input.followUp);
+    const memoryContext =
+      memories.length > 0
+        ? `\n<shared_memory note="Facts the user or their other assistants saved earlier; use them when relevant, do NOT cite them as a source">\n${memories
+            .map((m) => `<memory title="${m.title}">${m.summary}</memory>`)
+            .join('\n')}\n</shared_memory>`
+        : '';
+
+    const context = `<search_results note="These are the search results gathered across sub-questions; the assistant can cite these">\n${finalContext}\n</search_results>${memoryContext}`;
+
+    const writerPrompt = getWriterPrompt(
+      context,
+      input.config.systemInstructions,
+      'quality',
+    );
+
+    await this.streamBlock(
+      session,
+      input.config.llm.streamText({
+        messages: [
+          { role: 'system', content: writerPrompt },
+          ...input.chatHistory,
+          { role: 'user', content: input.followUp },
+        ],
+      }),
+    );
 
     session.emit('end', {});
 

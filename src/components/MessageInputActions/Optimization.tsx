@@ -1,4 +1,4 @@
-import { ChevronDown, Sliders, Star, Zap } from 'lucide-react';
+import { BookOpen, ChevronDown, Sliders, Star, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Popover,
@@ -33,6 +33,13 @@ const OptimizationModes = [
         className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
       />
     ),
+  },
+  {
+    key: 'deep',
+    title: 'Deep Research',
+    description:
+      'Decompose into sub-questions, research each, and produce a consolidated report',
+    icon: <BookOpen size={16} className="text-[#9C27B0]" />,
   },
 ];
 
