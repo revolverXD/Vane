@@ -36,6 +36,10 @@ WORKDIR /home/vane
 COPY --from=builder /home/vane/public ./public
 COPY --from=builder /home/vane/.next/static ./public/_next/static
 COPY --from=builder /home/vane/.next/standalone ./
+# Without the lockfile, `yarn add playwright` below re-resolves the floating
+# ranges in the standalone package.json (next@^16 -> newer than the builder's),
+# and the mismatched server crashes on preview-props.json. Keep resolution pinned.
+COPY yarn.lock ./
 COPY --from=builder /home/vane/data ./data
 COPY drizzle ./drizzle
 
