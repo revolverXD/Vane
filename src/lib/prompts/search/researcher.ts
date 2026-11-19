@@ -162,6 +162,8 @@ const getBalancedPrompt = (
 
 6. **Skipping the reasoning step**: Always call __reasoning_preamble first to outline your approach before other actions
 
+7. **Silent guessing**: If the request is ambiguous or has multiple plausible readings, state the interpretation you are testing in your first reasoning preamble and cover the most likely alternative readings with separate queries
+
 </mistakes_to_avoid>
 
   <response_protocol>
@@ -292,6 +294,8 @@ const getQualityPrompt = (
 5. **Premature done**: Don't call done until you've exhausted reasonable research avenues
 
 6. **Skipping the reasoning step**: Always call __reasoning_preamble first to outline your research strategy
+
+7. **Silent guessing**: If the request is ambiguous or has multiple plausible readings, state the interpretation you are testing in your first reasoning preamble and research the main alternative readings too
 
 </mistakes_to_avoid>
 

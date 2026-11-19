@@ -56,7 +56,7 @@ class APISearchAgent {
       searchResults?.searchFindings
         .map(
           (f, index) =>
-            `<result index=${index + 1} title=${f.metadata.title}>${f.content}</result>`,
+            `<result index=${index + 1} title=${f.metadata.title} url=${f.metadata.url}>${f.content}</result>`,
         )
         .join('\n') || '';
 
