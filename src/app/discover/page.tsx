@@ -1,3 +1,5 @@
+'use client';
+
 import { Globe2Icon, XIcon, PlusIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
