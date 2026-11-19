@@ -23,9 +23,17 @@ interface DBFile {
   fileId: string;
 }
 
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  instructions: text('instructions').notNull().default(''),
+  createdAt: text('createdAt').notNull(),
+});
+
 export const chats = sqliteTable('chats', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
+  projectId: text('projectId'),
   createdAt: text('createdAt').notNull(),
   sources: text('sources', {
     mode: 'json',

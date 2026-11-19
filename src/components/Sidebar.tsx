@@ -9,6 +9,7 @@ import {
   Settings,
   Plus,
   ArrowLeft,
+  Folder,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
@@ -48,6 +49,12 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
       href: '/library',
       active: segments.includes('library'),
       label: 'Library',
+    },
+    {
+      icon: Folder,
+      href: '/projects',
+      active: segments.includes('projects'),
+      label: 'Projects',
     },
   ];
 

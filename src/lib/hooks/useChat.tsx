@@ -773,6 +773,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
           providerId: embeddingModelProvider.providerId,
         },
         systemInstructions: localStorage.getItem('systemInstructions'),
+        projectId: localStorage.getItem('projectId'),
       }),
     });
 

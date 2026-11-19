@@ -7,7 +7,7 @@ import { ChatTurnMessage } from '@/lib/types';
 import { SearchSources } from '@/lib/agents/search/types';
 import db from '@/lib/db';
 import { and, eq } from 'drizzle-orm';
-import { chats, messages } from '@/lib/db/schema';
+import { chats, messages, projects } from '@/lib/db/schema';
 import UploadManager from '@/lib/uploads/manager';
 
 export const runtime = 'nodejs';
@@ -45,6 +45,7 @@ const bodySchema = z.object({
   chatModel: chatModelSchema,
   embeddingModel: embeddingModelSchema,
   systemInstructions: z.string().nullable().optional().default(''),
+  projectId: z.string().nullable().optional().default(null),
 });
 
 type Body = z.infer<typeof bodySchema>;
@@ -73,6 +74,7 @@ const ensureChatExists = async (input: {
   sources: SearchSources[];
   query: string;
   fileIds: string[];
+  projectId: string | null;
 }) => {
   try {
     const exists = await db.query.chats
@@ -87,6 +89,7 @@ const ensureChatExists = async (input: {
         createdAt: new Date().toISOString(),
         sources: input.sources,
         title: input.query,
+        projectId: input.projectId,
         files: input.fileIds.map((id) => {
           return {
             fileId: id,
@@ -123,6 +126,34 @@ export const POST = async (req: Request) => {
         },
         { status: 400 },
       );
+    }
+
+    await ensureChatExists({
+      id: message.chatId,
+      sources: body.sources as SearchSources[],
+      fileIds: body.files,
+      query: message.content,
+      projectId: body.projectId,
+    });
+
+    // Awaited before the run starts so a new chat's project applies to its
+    // first message too.
+    const chatRow = await db.query.chats.findFirst({
+      where: eq(chats.id, message.chatId),
+    });
+
+    if (chatRow?.projectId) {
+      const project = await db.query.projects.findFirst({
+        where: eq(projects.id, chatRow.projectId),
+      });
+
+      if (project) {
+        body.systemInstructions =
+          (body.systemInstructions || '') +
+          '\n\n<project_instructions>\n' +
+          project.instructions +
+          '\n</project_instructions>';
+      }
     }
 
     const registry = new ModelRegistry();
@@ -250,13 +281,6 @@ export const POST = async (req: Request) => {
           data: 'An error occurred while processing this request. Check the server logs for details.',
         });
       });
-
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: body.message.content,
-    });
 
     req.signal.addEventListener('abort', () => {
       disconnect();
