@@ -1,10 +1,16 @@
 services:
   vane:
-    image: itzcrazykns1337/vane:latest
+    image: vane-fork:latest
     build:
       context: .
+      dockerfile: Dockerfile.slim
+    container_name: vane
     ports:
-      - '3000:3000'
+      - '3002:3000'
+    environment:
+      SEARXNG_API_URL: http://192.168.50.193:9091
+      FIRECRAWL_API_URL: http://192.168.50.193:3005
+      MEMORY_API_URL: http://192.168.50.193:8090
     volumes:
       - data:/home/vane/data
     restart: unless-stopped
