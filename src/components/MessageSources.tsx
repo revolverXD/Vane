@@ -10,6 +10,11 @@ import { File } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { Chunk } from '@/lib/types';
 
+// Mantis CWE-79: citation URLs are attacker-controlled (search results /
+// RSS feeds). Only http(s) may become hrefs or image targets.
+const safeUrl = (url?: string): string =>
+  /^https?:\/\//i.test(url ?? '') ? (url as string) : '';
+
 const MessageSources = ({ sources }: { sources: Chunk[] }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -29,7 +34,7 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
         <a
           className="bg-light-100 hover:bg-light-200 dark:bg-dark-100 dark:hover:bg-dark-200 transition duration-200 rounded-lg p-3 flex flex-col space-y-2 font-medium"
           key={i}
-          href={source.metadata.url}
+          href={safeUrl(source.metadata.url)}
           target="_blank"
         >
           <p className="dark:text-white text-xs overflow-hidden whitespace-nowrap text-ellipsis">
@@ -43,7 +48,7 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
                 </div>
               ) : (
                 <img
-                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${source.metadata.url}`}
+                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${safeUrl(source.metadata.url)}`}
                   width={16}
                   height={16}
                   alt="favicon"
@@ -80,7 +85,7 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
               ) : (
                 <img
                   key={i}
-                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${source.metadata.url}`}
+                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${safeUrl(source.metadata.url)}`}
                   width={16}
                   height={16}
                   alt="favicon"
@@ -116,7 +121,7 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
                       <a
                         className="bg-light-secondary hover:bg-light-200 dark:bg-dark-secondary dark:hover:bg-dark-200 border border-light-200 dark:border-dark-200 transition duration-200 rounded-lg p-3 flex flex-col space-y-2 font-medium"
                         key={i}
-                        href={source.metadata.url}
+                        href={safeUrl(source.metadata.url)}
                         target="_blank"
                       >
                         <p className="dark:text-white text-xs overflow-hidden whitespace-nowrap text-ellipsis">
@@ -130,7 +135,7 @@ const MessageSources = ({ sources }: { sources: Chunk[] }) => {
                               </div>
                             ) : (
                               <img
-                                src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${source.metadata.url}`}
+                                src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${safeUrl(source.metadata.url)}`}
                                 width={16}
                                 height={16}
                                 alt="favicon"
