@@ -24,9 +24,16 @@ const strip = (t: string) =>
       .replace(/\s+/g, ' '),
   ).trim();
 
-const firstTag = (block: string, names: string): string => {
-  const m = new RegExp(`<(${names})[^>]*>([\\s\\S]*?)</\\1>`).exec(block);
-  return m ? m[2] : '';
+// Ordered preference, not regex alternation — WordPress feeds put the full
+// HTML (with images) in content:encoded while description is a plain excerpt.
+const firstTag = (block: string, names: string[]): string => {
+  for (const name of names) {
+    const m = new RegExp(
+      `<(${name})[^>]*>([\\s\\S]*?)</\\1>`,
+    ).exec(block);
+    if (m) return m[2];
+  }
+  return '';
 };
 
 const firstAttr = (block: string, tag: string, attr: string): string => {
@@ -46,25 +53,28 @@ export const parseFeed = (xml: string): RssItem[] => {
 
   const items: RssItem[] = [];
   for (const block of blocks) {
-    const title = strip(firstTag(block, 'title'));
-    let url = strip(firstTag(block, 'link'));
+    const title = strip(firstTag(block, ['title']));
+    let url = strip(firstTag(block, ['link']));
     if (!url) url = firstAttr(block, 'link', 'href');
     if (!title || !url) continue;
 
     const date =
       strip(
-        firstTag(block, 'pubDate|published|updated|date') ||
+        firstTag(block, ['pubDate', 'published', 'updated', 'date']) ||
           firstAttr(block, 'date', 'content'),
       ) || '';
 
-    const rawDescription = firstTag(
-      block,
-      'content:encoded|description|content|summary',
-    );
+    const rawDescription = firstTag(block, [
+      'content:encoded',
+      'description',
+      'content',
+      'summary',
+    ]);
     const imgInContent = /<img[^>]*\bsrc="([^"]+)"/.exec(rawDescription);
     const thumbnail =
       firstAttr(block, 'enclosure', 'url') ||
       firstAttr(block, 'media:content', 'url') ||
+      firstAttr(block, 'media:thumbnail', 'url') ||
       (imgInContent ? imgInContent[1] : '');
 
     items.push({
